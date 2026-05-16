@@ -1,0 +1,16 @@
+{
+  "ENHANCE_DEFAULT_PASTE_NAME": "Enhance Default Paste",
+  "ENHANCE_DEFAULT_PASTE_DESC": "Fetch the link title when pasting a link in the editor with the default paste command",
+  "ENHANCE_DROP_EVENTS_NAME": "Enhance Drop Events",
+  "ENHANCE_DROP_EVENTS_DESC": "Fetch the link title when drag and dropping a link from another program",
+  "FETCHING_TITLE": "Fetching title",
+  "MAX_TITLE_LENGTH_NAME": "Maximum title length",
+  "MAX_TITLE_LENGTH_DESC": "Set the maximum length of the title. Set to 0 to disable.",
+  "PRESERVE_SELECTION_NAME": "Preserve selection as title",
+  "PRESERVE_SELECTION_DESC": "Whether to prefer selected text as title over fetched title when pasting",
+  "WEBSITE_BLACKLIST_NAME": "Website Blacklist",
+  "WEBSITE_BLACKLIST_DESC": "List of strings (comma separated) that disable autocompleting website titles. Can be URLs or arbitrary text.",
+  "LINK_PREVIEW_API_KEY_NAME": "LinkPreview API Key",
+  "LINK_PREVIEW_API_KEY_DESC": "API key for the LinkPreview.net service. Get one at https://my.linkpreview.net/access_keys",
+  "API_KEY_NOTICE": "LinkPreview API key must be 32 characters long"
+}

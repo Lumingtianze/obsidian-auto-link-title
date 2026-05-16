@@ -1,0 +1,16 @@
+{
+  "ENHANCE_DEFAULT_PASTE_NAME": "增强默认粘贴",
+  "ENHANCE_DEFAULT_PASTE_DESC": "使用默认粘贴命令在编辑器中粘贴链接时，自动获取网页标题",
+  "ENHANCE_DROP_EVENTS_NAME": "增强拖放事件",
+  "ENHANCE_DROP_EVENTS_DESC": "从其他程序拖放链接到编辑器时，自动获取网页标题",
+  "FETCHING_TITLE": "获取标题中",
+  "MAX_TITLE_LENGTH_NAME": "最大标题长度",
+  "MAX_TITLE_LENGTH_DESC": "设置标题的最大长度。设置为 0 则不限制长度。",
+  "PRESERVE_SELECTION_NAME": "保留选中文本作为标题",
+  "PRESERVE_SELECTION_DESC": "粘贴时是否优先使用选中的文本作为标题，而不是抓取网页标题",
+  "WEBSITE_BLACKLIST_NAME": "网站黑名单",
+  "WEBSITE_BLACKLIST_DESC": "禁止自动获取标题的字符串列表（逗号分隔）。可以是 URL 或特定文本。",
+  "LINK_PREVIEW_API_KEY_NAME": "LinkPreview API 密钥",
+  "LINK_PREVIEW_API_KEY_DESC": "LinkPreview.net 服务的 API 密钥。可在 https://my.linkpreview.net/access_keys 获取",
+  "API_KEY_NOTICE": "LinkPreview API 密钥必须为 32 位字符长度"
+}

@@ -1,27 +1,27 @@
-import { CheckIf } from "checkif";
-import { EditorExtensions } from "editor-enhancements";
+import { CheckIf } from "./checkif";
+import { EditorExtensions } from "./editor-enhancements";
 import { Editor, Plugin, Notice } from "obsidian";
-import getPageTitle from "scraper";
-import getElectronPageTitle from "electron-scraper";
+import getPageTitle from "./scraper";
 import {
   AutoLinkTitleSettingTab,
   AutoLinkTitleSettings,
   DEFAULT_SETTINGS,
 } from "./settings";
+import { t } from "./lang/helpers"; 
 
 interface PasteFunction {
-  (this: HTMLElement, ev: ClipboardEvent): void;
+  (clipboard: ClipboardEvent, editor: Editor): void | Promise<void>;
 }
 
 interface DropFunction {
-  (this: HTMLElement, ev: DragEvent): void;
+  (dropEvent: DragEvent, editor: Editor): void | Promise<void>;
 }
 
 export default class AutoLinkTitle extends Plugin {
-  settings: AutoLinkTitleSettings;
-  pasteFunction: PasteFunction;
-  dropFunction: DropFunction;
-  blacklist: Array<string>;
+  settings!: AutoLinkTitleSettings;
+  pasteFunction!: PasteFunction;
+  dropFunction!: DropFunction;
+  blacklist!: Array<string>;
 
   async onload() {
     console.log("loading obsidian-auto-link-title");
@@ -159,7 +159,10 @@ export default class AutoLinkTitle extends Plugin {
 
     if (clipboard.defaultPrevented) return;
 
-    let clipboardText = clipboard.clipboardData.getData("text/plain");
+    let clipboardData = clipboard.clipboardData;
+    if (!clipboardData) return;
+
+    let clipboardText = clipboardData.getData("text/plain");
     if (clipboardText === null || clipboardText === "") return;
 
     // If its not a URL, we return false to allow the default paste handler to take care of it.
@@ -201,13 +204,11 @@ export default class AutoLinkTitle extends Plugin {
   }
 
   async dropUrlWithTitle(dropEvent: DragEvent, editor: Editor): Promise<void> {
-    if (!this.settings.enhanceDropEvents) {
-      return;
-    }
-
-    if (dropEvent.defaultPrevented) return;
-
+    if (!this.settings.enhanceDropEvents || dropEvent.defaultPrevented) return;
+    
+    if (!dropEvent.dataTransfer) return;
     let dropText = dropEvent.dataTransfer.getData("text/plain");
+    
     if (dropText === null || dropText === "") return;
 
     // If its not a URL, we return false to allow the default paste handler to take care of it.
@@ -257,36 +258,45 @@ export default class AutoLinkTitle extends Plugin {
   }
 
   async convertUrlToTitledLink(editor: Editor, url: string): Promise<void> {
+    // 1. 检查黑名单
     if (await this.isBlacklisted(url)) {
-      let domain = new URL(url).hostname;
+      const domain = new URL(url).hostname;
       editor.replaceSelection(`[${domain}](${url})`);
       return;
     }
 
-    // Generate a unique id for find/replace operations for the title.
+    // 2. 生成一个临时占位符 (使用不可见字符确保唯一性且美观)
     const pasteId = this.getPasteId();
-
-    // Instantly paste so you don't wonder if paste is broken
+    
+    // 3. 立即插入占位符，让用户知道正在处理
     editor.replaceSelection(`[${pasteId}](${url})`);
 
-    // Fetch title from site, replace Fetching Title with actual title
-    const title = await this.fetchUrlTitle(url);
-    const escapedTitle = this.escapeMarkdown(title);
-    const shortenedTitle = this.shortTitle(escapedTitle);
-
-    const text = editor.getValue();
-
-    const start = text.indexOf(pasteId);
-    if (start < 0) {
-      console.log(
-        `Unable to find text "${pasteId}" in current editor, bailing out; link ${url}`
-      );
+    // 4. 获取标题
+    let title = await this.fetchUrlTitle(url);
+    
+    // 5. 确定最终要显示的文本
+    // 决策逻辑：如果标题为空，则直接使用域名
+    let finalTitle = "";
+    if (!title || title === url) {
+      try {
+        finalTitle = new URL(url).hostname; 
+      } catch {
+        finalTitle = "Link"; // 极端情况下 URL 解析都报错的回退
+      }
     } else {
-      const end = start + pasteId.length;
-      const startPos = EditorExtensions.getEditorPositionFromIndex(text, start);
-      const endPos = EditorExtensions.getEditorPositionFromIndex(text, end);
+      finalTitle = this.shortTitle(this.escapeMarkdown(title));
+    }
 
-      editor.replaceRange(shortenedTitle, startPos, endPos);
+    // 6. 执行替换操作（将占位符替换为最终标题或域名）
+    const text = editor.getValue();
+    const start = text.indexOf(pasteId);
+    if (start >= 0) {
+      const end = start + pasteId.length;
+      editor.replaceRange(
+        finalTitle,
+        EditorExtensions.getEditorPositionFromIndex(text, start),
+        EditorExtensions.getEditorPositionFromIndex(text, end)
+      );
     }
   }
 
@@ -338,19 +348,13 @@ export default class AutoLinkTitle extends Plugin {
 
   async fetchUrlTitle(url: string): Promise<string> {
     try {
-      let title = "";
-      title = await this.fetchUrlTitleViaLinkPreview(url);
+      // 优先尝试 API (如果用户配置了)
+      let title = await this.fetchUrlTitleViaLinkPreview(url);
       console.log(`Title via Link Preview: ${title}`);
 
-      if (title === "") {
-        console.log("Title via Link Preview failed, falling back to scraper");
-        if (this.settings.useNewScraper) {
-          console.log("Using new scraper");
-          title = await getPageTitle(url);
-        } else {
-          console.log("Using old scraper");
-          title = await getElectronPageTitle(url);
-        }
+      if (!title) {
+        // 调用增强后的 scraper，内部自动处理 GBK/UTF-8 编码
+        title = await getPageTitle(url, true); 
       }
 
       console.log(`Title: ${title}`);
@@ -366,33 +370,24 @@ export default class AutoLinkTitle extends Plugin {
 
   public getUrlFromLink(link: string): string {
     let urlRegex = new RegExp(DEFAULT_SETTINGS.linkRegex);
-    return urlRegex.exec(link)[2];
+    const match = urlRegex.exec(link);
+    return match ? match[2] : "";
   }
 
+  /**
+   * 在每个字符间插入 0-2 个零宽空格 (\u200B)
+   * 这样对用户来说看到的是普通的文字，但对代码来说它是全局唯一的 ID。
+   */
   private getPasteId(): string {
-    var base = "Fetching Title";
-    if (this.settings.useBetterPasteId) {
-      return this.getBetterPasteId(base);
-    } else {
-      return `${base}#${this.createBlockHash()}`;
-    }
-  }
-
-  private getBetterPasteId(base: string): string {
-    // After every character, add 0, 1 or 2 invisible characters
-    // so that to the user it looks just like the base string.
-    // The number of combinations is 3^14 = 4782969
+    const base = t("FETCHING_TITLE"); 
     let result = "";
-    var invisibleCharacter = "\u200B";
-    var maxInvisibleCharacters = 2;
-    for (var i = 0; i < base.length; i++) {
-      var count = Math.floor(
-        Math.random() * (maxInvisibleCharacters + 1)
-      );
-      result += base.charAt(i) + invisibleCharacter.repeat(count);
+    for (let i = 0; i < base.length; i++) {
+      // 插入随机数量的零宽空格，确保同一页面多次粘贴不冲突
+      result += base.charAt(i) + "\u200B".repeat(Math.floor(Math.random() * 3));
     }
     return result;
   }
+
 
   // Custom hashid by @shabegom
   private createBlockHash(): string {
